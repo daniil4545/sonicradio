@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dancnb/sonicradio/model"
 )
 
 // Retro header: tuner scale, fake spectrum analyzer and volume bar.
@@ -151,16 +152,22 @@ func volumeBarView(c RetroColors, vol int) string {
 		fg(c.dim, strings.Repeat("▱", 20-n)) + fg(c.dim, fmt.Sprintf(" %3d", vol))
 }
 
-// retroTarget is the tuner frequency: the playing station, else the
-// favorite under the cursor. found is false when the station is not a favorite.
+// retroTarget follows the Favorites cursor, or playback in other tabs.
 func (m *Model) retroTarget() (freq float64, found bool) {
 	favs := m.cfg.GetFavorites()
 	m.delegate.playingMtx.RLock()
-	curr, prev := m.delegate.currPlaying, m.delegate.prevPlaying
-	m.delegate.playingMtx.RUnlock()
-	s := curr
+	s := m.delegate.currPlaying
 	if s == nil {
-		s = prev
+		s = m.delegate.prevPlaying
+	}
+	m.delegate.playingMtx.RUnlock()
+	if m.activeTabIdx == favoriteTabIx {
+		s = nil
+		if t, ok := m.tabs[favoriteTabIx].(stationTab); ok {
+			if selected, ok := t.Stations().list.SelectedItem().(model.Station); ok {
+				s = &selected
+			}
+		}
 	}
 	if s != nil {
 		for i := range favs {
@@ -170,10 +177,7 @@ func (m *Model) retroTarget() (freq float64, found bool) {
 		}
 		return m.retro.needle, false
 	}
-	if t, ok := m.tabs[favoriteTabIx].(stationTab); ok && t.Stations() != nil {
-		return stationFreq(t.Stations().list.Index(), len(favs)), true
-	}
-	return tunerMinFreq, false
+	return m.retro.needle, false
 }
 
 // retroStep is called on each spinner tick (10 fps while a station plays).

@@ -31,10 +31,10 @@ func newFavoritesTab(cfg *config.Value, infoModel *infoModel, browser *browser.A
 func (t *favoritesTab) createList(delegate *stationDelegate, width int, height int) list.Model {
 	l := createList(delegate, width, height)
 	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{t.listKeymap.search, t.listKeymap.addCustomFavorite}
+		return []key.Binding{tabBarHelp()[0], t.listKeymap.search, t.listKeymap.addCustomFavorite}
 	}
 	l.AdditionalFullHelpKeys = func() []key.Binding {
-		return []key.Binding{
+		return append(tabBarHelp(), []key.Binding{
 			t.listKeymap.search,
 			t.listKeymap.digitHelp,
 			t.listKeymap.toNowPlaying,
@@ -45,7 +45,7 @@ func (t *favoritesTab) createList(delegate *stationDelegate, width int, height i
 			t.listKeymap.settingsTab,
 			t.listKeymap.stationView,
 			t.listKeymap.addCustomFavorite,
-		}
+		}...)
 	}
 
 	return l
