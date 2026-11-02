@@ -175,3 +175,14 @@ func TestDialHeaderAndSettings(t *testing.T) {
 	}
 	t.Log("Favorites cursor: 98.0 FM; NoAnimation jumps; Settings keeps Up/Down; short help: ↑ tabs")
 }
+
+func TestTabBarPassesOtherKeys(t *testing.T) {
+	m := dialModel()
+	press(m, tea.KeyUp)
+	if !m.tabBarFocused {
+		t.Fatal("Up on first row did not focus tabs")
+	}
+	if !isTabBarKey(tea.KeyMsg{Type: tea.KeyRight}) || isTabBarKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}) {
+		t.Fatal("tab bar key set is wrong")
+	}
+}

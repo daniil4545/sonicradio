@@ -54,7 +54,7 @@ func (m *Model) updateTabBar(msg tea.KeyMsg) tea.Cmd {
 	case "down", "enter", "esc":
 		m.tabBarFocused = false
 		return nil
-	default:
+	default: // up: already in the tab bar
 		return nil
 	}
 	var exit tea.Cmd
@@ -74,6 +74,14 @@ func (m *Model) updateTabBar(msg tea.KeyMsg) tea.Cmd {
 		return m.toSettingsTab()
 	}
 	return exit
+}
+
+func isTabBarKey(msg tea.KeyMsg) bool {
+	switch msg.String() {
+	case "left", "right", "h", "l", "up", "down", "enter", "esc":
+		return true
+	}
+	return false
 }
 
 func tabBarHelp() []key.Binding {
