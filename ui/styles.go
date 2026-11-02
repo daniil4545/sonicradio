@@ -30,6 +30,7 @@ type Style struct {
 	baseSecondaryColor     lipgloss.AdaptiveColor
 	invertedPrimaryColor   lipgloss.AdaptiveColor
 	invertedSecondaryColor lipgloss.AdaptiveColor
+	retro                  RetroColors
 
 	PrimaryColorStyle   lipgloss.Style
 	SecondaryColorStyle lipgloss.Style
@@ -111,6 +112,15 @@ func (s *Style) SetThemeIdx(themeIdx int) {
 }
 
 func (s *Style) setTheme(t Theme) {
+	if t.Retro != nil {
+		s.retro = *t.Retro
+	} else {
+		d := t.Dark
+		s.retro = RetroColors{
+			text: d.primaryColor, dim: d.invertedSecondaryColor, frame: d.secondaryColor,
+			label: d.secondaryColor, led: [retroBarRows]string{d.secondaryColor, d.secondaryColor, d.primaryColor},
+		}
+	}
 	s.theme = t.Name
 	s.basePrimaryColor = lipgloss.AdaptiveColor{Light: t.Light.primaryColor, Dark: t.Dark.primaryColor}
 	s.baseSecondaryColor = lipgloss.AdaptiveColor{Light: t.Light.secondaryColor, Dark: t.Dark.secondaryColor}

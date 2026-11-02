@@ -36,6 +36,8 @@ const (
 	favoritesRefreshIdx settingsInputIdx = iota
 	historySaveMaxIdx
 	themesIdx
+	retroHeaderIdx
+	animationIdx
 	playerTypeIdx
 	internalBufferSecIdx
 	mpdHostIdx
@@ -88,6 +90,9 @@ func newSettingsTab(
 	themeList.PartialCallbackFn = changeThemeFn
 	themeList.DoneCallbackFn = changeThemeFn
 
+	retroHeader := NewCheckbox("Retro header", !cfg.ClassicHeader, s)
+	animation := NewCheckbox("Header animation", !cfg.NoAnimation, s)
+
 	// player
 	playerOpts := make([]OptionValue, len(availablePlayerTypes))
 	var startIdx int
@@ -118,6 +123,12 @@ func newSettingsTab(
 		NewFormElement(
 			WithOptionList(&themeList),
 			WithDescription(descriptions[1])),
+		NewFormElement(
+			WithCheckbox(retroHeader),
+			WithDescription("Tuner scale, spectrum analyzer and volume bar. Off: the original minimal header.")),
+		NewFormElement(
+			WithCheckbox(animation),
+			WithDescription("Animate the tuner pointer and the analyzer while a station plays.")),
 		NewFormElement(
 			WithOptionList(&playerList),
 			WithDescription(playerDesc)),
@@ -190,6 +201,9 @@ func (s *settingsTab) loadConfig() {
 
 	s.inputs[historySaveMaxIdx].SetValue(fmt.Sprintf("%d", *s.cfg.HistorySaveMax))
 
+	s.inputs[retroHeaderIdx].SetValue(!s.cfg.ClassicHeader)
+	s.inputs[animationIdx].SetValue(!s.cfg.NoAnimation)
+
 	s.inputs[internalBufferSecIdx].SetValue(fmt.Sprintf("%d", s.cfg.Internal.BufferSeconds))
 
 	if len(s.inputs) > int(internalBufferSecIdx)+1 {
@@ -237,6 +251,13 @@ func (s *settingsTab) updateConfig() {
 		log.Info(fmt.Sprintf("invalid value for config Favorites.RefreshOnStart (%v) err: %v", favoritesRefreshVal, err))
 	} else {
 		s.cfg.Favorites.RefreshOnStart = favoritesRefreshBoolVal
+	}
+
+	if v, err := strconv.ParseBool(s.inputs[retroHeaderIdx].Value()); err == nil {
+		s.cfg.ClassicHeader = !v
+	}
+	if v, err := strconv.ParseBool(s.inputs[animationIdx].Value()); err == nil {
+		s.cfg.NoAnimation = !v
 	}
 
 	historySaveMaxval := s.inputs[historySaveMaxIdx].Value()
@@ -388,6 +409,10 @@ func (s *settingsTab) resetSettings() {
 
 	s.changeThemeFn(0)
 	s.inputs[themesIdx].SetValue(0)
+
+	s.cfg.ClassicHeader, s.cfg.NoAnimation = false, false
+	s.inputs[retroHeaderIdx].SetValue(true)
+	s.inputs[animationIdx].SetValue(true)
 }
 
 func (s *settingsTab) changeInput(cmds []tea.Cmd) []tea.Cmd {

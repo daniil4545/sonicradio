@@ -11,9 +11,28 @@ type Theme struct {
 	Name  string
 	Dark  ColorProfile
 	Light ColorProfile
+	// Retro is nil for themes made before the retro header; colors are derived then.
+	Retro *RetroColors
+}
+
+func retroTheme(name string, c RetroColors, bg string) Theme {
+	p := ColorProfile{primaryColor: c.text, secondaryColor: c.label, invertedPrimaryColor: bg, invertedSecondaryColor: c.dim}
+	return Theme{Name: name, Dark: p, Light: p, Retro: &c}
 }
 
 var Themes = []Theme{
+	retroTheme("Retro Amber", RetroColors{
+		text: "#e8dcc0", dim: "#7a6a50", frame: "#a08660", label: "#e8a33d",
+		led: [retroBarRows]string{"#b8862f", "#e8a33d", "#f2c46d"},
+	}, "#2a2218"),
+	retroTheme("Retro LED", RetroColors{
+		text: "#d8d0c0", dim: "#6e6658", frame: "#8c8474", label: "#d8b84a",
+		led: [retroBarRows]string{"#6fae4f", "#d8b84a", "#c8553d"},
+	}, "#26231f"),
+	retroTheme("Retro Phosphor", RetroColors{
+		text: "#a8e0b0", dim: "#3f6b48", frame: "#4f8a5c", label: "#7fd08f",
+		led: [retroBarRows]string{"#3f9a55", "#5fc070", "#a8f0b0"},
+	}, "#132016"),
 	{
 		Name:  "Duo Yellow",
 		Dark:  ColorProfile{primaryColor: "#D4DAF7", secondaryColor: "#D58610", invertedPrimaryColor: "#2D2D0B", invertedSecondaryColor: "#827545"},
