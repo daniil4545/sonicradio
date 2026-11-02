@@ -185,10 +185,10 @@ func (t *historyTab) createList(width int, height int) {
 	l.Help.Styles = t.style.HelpStyles()
 	l.Styles.HelpStyle = t.style.HelpStyle
 	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{t.keymap.search}
+		return []key.Binding{tabBarHelp()[0], t.keymap.search}
 	}
 	l.AdditionalFullHelpKeys = func() []key.Binding {
-		return []key.Binding{
+		return append(tabBarHelp(), []key.Binding{
 			t.keymap.search,
 			t.keymap.digitHelp,
 			t.keymap.prevTab,
@@ -196,7 +196,7 @@ func (t *historyTab) createList(width int, height int) {
 			t.keymap.favoritesTab,
 			t.keymap.browseTab,
 			t.keymap.settingsTab,
-		}
+		}...)
 	}
 
 	t.style.TextInputSyle(&l.FilterInput, stationsFilterPrompt, historyFilterPlaceholder)

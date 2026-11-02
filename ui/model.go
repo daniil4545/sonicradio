@@ -139,8 +139,10 @@ type Model struct {
 	player   *player.Player
 	delegate *stationDelegate
 
-	tabs         []uiTab
-	activeTabIdx uiTabIndex
+	tabs           []uiTab
+	activeTabIdx   uiTabIndex
+	tabBarFocused  bool
+	tuneGeneration uint64
 
 	// display currently performed action or encountered error
 	statusMsg    string
@@ -162,11 +164,38 @@ func (m *Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+//nolint:gocognit,funlen // The event dispatcher keeps tab routing in one place.
+func (m *Model) Update(msg tea.Msg) (result tea.Model, cmd tea.Cmd) {
 	logTeaMsg(msg, "ui.model.Update")
 	activeTab := m.tabs[m.activeTabIdx]
+	before, beforeTab, beforeFocus := m.dialStation(), m.activeTabIdx, m.tabBarFocused
+	_, isKey := msg.(tea.KeyMsg)
+	beforeFilter := m.listFilterState()
+	cursorKey := isKey && m.navigationList() != nil
+	defer func() {
+		after := m.dialStation()
+		if before != after {
+			m.tuneGeneration++
+			// only a key moving the list cursor tunes: not entering the tab,
+			// leaving the tab bar, closing a filter or reloading the list
+			if cursorKey && beforeFilter == m.listFilterState() && after != "" && beforeTab == m.activeTabIdx && beforeFocus == m.tabBarFocused {
+				generation := m.tuneGeneration
+				cmd = tea.Batch(cmd, tea.Tick(700*time.Millisecond, func(time.Time) tea.Msg {
+					return dialTuneMsg{generation, after}
+				}))
+			}
+		}
+	}()
 
 	switch msg := msg.(type) {
+	case dialTuneMsg:
+		if msg.generation == m.tuneGeneration && msg.uuid == m.dialStation() && msg.uuid != "" {
+			m.tuneGeneration++
+			if s, ok := m.navigationList().SelectedItem().(model.Station); ok {
+				return m, m.playStationCmd(s)
+			}
+		}
+		return m, nil
 	//
 	// messages that need to reach all tabs
 	//
@@ -256,11 +285,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
+		} else if m.tabBarFocused && isTabBarKey(msg) {
+			return m, m.updateTabBar(msg)
 		} else if activeTab, ok := activeTab.(filteringTab); ok && activeTab.IsFiltering() {
 			break
 		} else if activeTab, ok := activeTab.(stationTab); ok &&
 			(activeTab.IsSearchEnabled() || activeTab.IsFiltering() || activeTab.IsCustomStationEnabled()) {
 			break
+		}
+		if l := m.navigationList(); l != nil && msg.String() == "up" && l.Index() == 0 {
+			m.tabBarFocused = true
+			return m, nil
 		}
 
 		d := m.delegate
@@ -285,6 +320,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if key.Matches(msg, d.keymap.pause) {
+			m.tuneGeneration++
 			if m.activeTabIdx == settingsTabIx {
 				return m.tabs[settingsTabIx].Update(m, msg)
 			}
@@ -307,6 +343,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if key.Matches(msg, d.keymap.playSelected) {
+			m.tuneGeneration++
 			if m.activeTabIdx == settingsTabIx {
 				return m.tabs[settingsTabIx].Update(m, msg)
 			}
@@ -461,6 +498,10 @@ func (m *Model) headerView(width int) string {
 		if i == int(m.activeTabIdx) {
 			tabName := m.activeTabIdx.String()
 			renderedTab := m.renderTabName(tabName, &m.style.ActiveTabInner, &m.style.ActiveTabInnerHighlight)
+			if m.tabBarFocused {
+				renderedTab.Reset()
+				renderedTab.WriteString(m.style.ActiveTabInner.Foreground(lipgloss.Color(m.style.retro.label)).Render(" ▸" + strings.TrimSpace(tabName) + " "))
+			}
 			renderedTabs = append(renderedTabs, m.style.ActiveTabBorder.Render(renderedTab.String()))
 		} else {
 			tabName := uiTabIndex(i).String()

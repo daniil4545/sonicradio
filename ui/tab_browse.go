@@ -29,10 +29,10 @@ func newBrowseTab(ctx context.Context, browser *browser.API, infoModel *infoMode
 func (t *browseTab) createList(delegate *stationDelegate, width int, height int) list.Model {
 	l := createList(delegate, width, height)
 	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{t.listKeymap.search}
+		return []key.Binding{tabBarHelp()[0], t.listKeymap.search}
 	}
 	l.AdditionalFullHelpKeys = func() []key.Binding {
-		return []key.Binding{
+		return append(tabBarHelp(), []key.Binding{
 			t.listKeymap.search,
 			t.listKeymap.digitHelp,
 			t.listKeymap.toNowPlaying,
@@ -42,7 +42,7 @@ func (t *browseTab) createList(delegate *stationDelegate, width int, height int)
 			t.listKeymap.historyTab,
 			t.listKeymap.settingsTab,
 			t.listKeymap.stationView,
-		}
+		}...)
 	}
 
 	return l
