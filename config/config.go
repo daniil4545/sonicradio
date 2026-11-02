@@ -74,11 +74,15 @@ const (
 )
 
 type Value struct {
-	Version     string      `json:"-"`
-	FavoritesV1 []string    `json:"favorites,omitempty"` // Ordered station UUID's for user favorites
-	Favorites   Favorites   `json:"favoritesv2"`
-	Volume      *int        `json:"volume,omitempty"`
-	Theme       int         `json:"theme"`
+	Version     string    `json:"-"`
+	FavoritesV1 []string  `json:"favorites,omitempty"` // Ordered station UUID's for user favorites
+	Favorites   Favorites `json:"favoritesv2"`
+	Volume      *int      `json:"volume,omitempty"`
+	Theme       int       `json:"theme"`
+	// ClassicHeader turns off the retro header (tuner, analyzer, volume bar).
+	ClassicHeader bool `json:"classicHeader,omitempty"`
+	// NoAnimation freezes the retro header animation.
+	NoAnimation bool        `json:"noAnimation,omitempty"`
 	StationView StationView `json:"stationView"`
 
 	Player         PlayerType `json:"playerType"`

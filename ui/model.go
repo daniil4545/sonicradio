@@ -68,6 +68,7 @@ func newModel(ctx context.Context, cfg *config.Value, b *browser.API, p *player.
 		statusUpdate: make(chan struct{}),
 
 		volumeBar: getVolumeBar(style.GetSecondColor()),
+		retro:     newRetroState(),
 	}
 	m.tabs = []uiTab{
 		newFavoritesTab(cfg, infoModel, b, style),
@@ -150,6 +151,7 @@ type Model struct {
 	spinner      *spinner.Model
 	songTitle    string
 	volumeBar    progress.Model
+	retro        retroState
 
 	width        int
 	totHeight    int
@@ -215,6 +217,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		s, cmd := m.spinner.Update(msg)
 		m.spinner = &s
+		if cmd != nil {
+			m.retroStep()
+		}
 		return m, cmd
 
 	//
@@ -433,21 +438,22 @@ func (m *Model) initSpinner() tea.Cmd {
 
 func (m *Model) headerView(width int) string {
 	var res strings.Builder
-	status := ""
-	if len(m.statusMsg) > 0 {
-		status = m.style.StatusBarStyle.Render(strings.Repeat(" ", HeaderPadDist) + m.statusMsg)
+	if m.cfg.ClassicHeader {
+		status := ""
+		if len(m.statusMsg) > 0 {
+			status = m.style.StatusBarStyle.Render(strings.Repeat(" ", HeaderPadDist) + m.statusMsg)
+		}
+		res.WriteString(status)
+		appNameVers := m.style.StatusBarStyle.Render(fmt.Sprintf("sonicradio v%v  ", m.cfg.Version))
+		fill := max(0, width-lipgloss.Width(status)-lipgloss.Width(appNameVers)-2*HeaderPadDist)
+		res.WriteString(m.style.StatusBarStyle.Render(strings.Repeat(" ", fill)))
+		res.WriteString(appNameVers)
+		res.WriteString("\n\n")
+		res.WriteString(m.metadataView(width))
+		res.WriteString("\n\n")
+	} else {
+		res.WriteString(m.retroHeaderView(width))
 	}
-	res.WriteString(status)
-	appNameVers := m.style.StatusBarStyle.Render(fmt.Sprintf("sonicradio v%v  ", m.cfg.Version))
-	fill := max(0, width-lipgloss.Width(status)-lipgloss.Width(appNameVers)-2*HeaderPadDist)
-	res.WriteString(m.style.StatusBarStyle.Render(strings.Repeat(" ", fill)))
-	res.WriteString(appNameVers)
-	res.WriteString("\n\n")
-
-	metadata := m.metadataView(width)
-	res.WriteString(metadata)
-
-	res.WriteString("\n\n")
 
 	var renderedTabs []string
 	renderedTabs = append(renderedTabs, m.style.TabGap.Render(strings.Repeat(" ", TabGapDistance)))
