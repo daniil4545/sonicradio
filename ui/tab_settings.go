@@ -417,7 +417,7 @@ func (s *settingsTab) resetSettings() {
 	s.changeThemeFn(0)
 	s.inputs[themesIdx].SetValue(0)
 
-	s.cfg.ClassicHeader, s.cfg.NoAnimation = false, false
+	// cfg is updated by onExit, which also resizes when the header style changes
 	s.inputs[retroHeaderIdx].SetValue(true)
 	s.inputs[animationIdx].SetValue(true)
 }
