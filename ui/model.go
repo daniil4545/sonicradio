@@ -152,8 +152,6 @@ type Model struct {
 	songTitle    string
 	volumeBar    progress.Model
 	retro        retroState
-	// header style the list height was computed for
-	classicHeader bool
 
 	width        int
 	totHeight    int
@@ -168,11 +166,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	logTeaMsg(msg, "ui.model.Update")
 	activeTab := m.tabs[m.activeTabIdx]
 
-	if m.ready && m.classicHeader != m.cfg.ClassicHeader {
-		w, h := m.width, m.totHeight
-		return m, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
-	}
-
 	switch msg := msg.(type) {
 	//
 	// messages that need to reach all tabs
@@ -180,7 +173,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.totHeight = msg.Height
-		m.classicHeader = m.cfg.ClassicHeader
 		header := m.headerView(msg.Width)
 		m.headerHeight = strings.Count(header, "\n")
 		var cmds []tea.Cmd

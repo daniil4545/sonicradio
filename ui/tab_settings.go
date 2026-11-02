@@ -235,11 +235,18 @@ func (s *settingsTab) onEnter() tea.Cmd {
 	return s.inputs[favoritesRefreshIdx].Focus()
 }
 
-func (s *settingsTab) onExit() {
+func (s *settingsTab) onExit(m *Model) tea.Cmd {
 	s.inputs[themesIdx].Blur()
 	s.keymap.setEnable(false, false)
 
+	classic := s.cfg.ClassicHeader
 	s.updateConfig()
+	if classic == s.cfg.ClassicHeader {
+		return nil
+	}
+	// the header height changed: resize so the lists get the new height
+	w, h := m.width, m.totHeight
+	return func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
 }
 
 func (s *settingsTab) updateConfig() {
@@ -344,13 +351,13 @@ func (s *settingsTab) Update(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 	m.toBrowseTab()
 		// 	return m.tabs[browseTabIx].Update(m, msg)
 		case key.Matches(msg, s.keymap.nextTab, s.keymap.favoritesTab):
-			s.onExit()
+			cmds = append(cmds, s.onExit(m))
 			m.toFavoritesTab()
 		case key.Matches(msg, s.keymap.browseTab):
-			s.onExit()
+			cmds = append(cmds, s.onExit(m))
 			m.toBrowseTab()
 		case key.Matches(msg, s.keymap.prevTab, s.keymap.historyTab):
-			s.onExit()
+			cmds = append(cmds, s.onExit(m))
 			m.toHistoryTab()
 
 		case key.Matches(msg, s.keymap.nextInput):

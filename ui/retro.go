@@ -124,6 +124,10 @@ func (r *retroState) tunerRows(c RetroColors) [retroBarRows]string {
 
 func (r *retroState) analyzerRows(c RetroColors, playing bool) [retroBarRows]string {
 	var rows [retroBarRows]string
+	if !playing {
+		blank := strings.Repeat(" ", retroBars*2)
+		return [retroBarRows]string{blank, blank, blank}
+	}
 	for row := retroBarRows - 1; row >= 0; row-- {
 		var b strings.Builder
 		for i := range retroBars {
@@ -187,14 +191,15 @@ func (m *Model) retroStep() {
 func (m *Model) retroHeaderView(width int) string {
 	c := m.style.retro
 	target, found := m.retroTarget()
-	if m.cfg.NoAnimation {
-		m.retro.needle = target
-	}
 
 	m.delegate.playingMtx.RLock()
 	curr, prev := m.delegate.currPlaying, m.delegate.prevPlaying
 	m.delegate.playingMtx.RUnlock()
 	playing := curr != nil
+	// no ticks run while nothing plays, so the pointer jumps instead of gliding
+	if m.cfg.NoAnimation || !playing {
+		m.retro.needle = target
+	}
 
 	var status string
 	switch {
