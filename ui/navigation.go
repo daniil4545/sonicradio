@@ -4,13 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dancnb/sonicradio/model"
 )
-
-type dialTuneMsg struct {
-	generation uint64
-	uuid       string
-}
 
 // navigationList excludes forms, filters and station details.
 func (m *Model) navigationList() *list.Model {
@@ -25,31 +19,6 @@ func (m *Model) navigationList() *list.Model {
 		}
 	}
 	return nil
-}
-
-// listFilterState lets a filter reset, which swaps the selection, skip tuning.
-func (m *Model) listFilterState() list.FilterState {
-	if l := m.navigationList(); l != nil {
-		return l.FilterState()
-	}
-	return list.Unfiltered
-}
-
-func (m *Model) dialStation() string {
-	if m.activeTabIdx != favoriteTabIx || m.tabBarFocused {
-		return ""
-	}
-	l := m.navigationList()
-	if l == nil {
-		return ""
-	}
-	s, ok := l.SelectedItem().(model.Station)
-	m.delegate.playingMtx.RLock()
-	defer m.delegate.playingMtx.RUnlock()
-	if !ok || m.delegate.currPlaying == nil || s.Stationuuid == m.delegate.currPlaying.Stationuuid {
-		return ""
-	}
-	return s.Stationuuid
 }
 
 func (m *Model) updateTabBar(msg tea.KeyMsg) tea.Cmd {

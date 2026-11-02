@@ -139,10 +139,9 @@ type Model struct {
 	player   *player.Player
 	delegate *stationDelegate
 
-	tabs           []uiTab
-	activeTabIdx   uiTabIndex
-	tabBarFocused  bool
-	tuneGeneration uint64
+	tabs          []uiTab
+	activeTabIdx  uiTabIndex
+	tabBarFocused bool
 
 	// display currently performed action or encountered error
 	statusMsg    string
@@ -165,37 +164,11 @@ func (m *Model) Init() tea.Cmd {
 }
 
 //nolint:gocognit,funlen // The event dispatcher keeps tab routing in one place.
-func (m *Model) Update(msg tea.Msg) (result tea.Model, cmd tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	logTeaMsg(msg, "ui.model.Update")
 	activeTab := m.tabs[m.activeTabIdx]
-	before, beforeTab, beforeFocus := m.dialStation(), m.activeTabIdx, m.tabBarFocused
-	_, isKey := msg.(tea.KeyMsg)
-	beforeFilter := m.listFilterState()
-	cursorKey := isKey && m.navigationList() != nil
-	defer func() {
-		after := m.dialStation()
-		if before != after {
-			m.tuneGeneration++
-			// only a key moving the list cursor tunes: not entering the tab,
-			// leaving the tab bar, closing a filter or reloading the list
-			if cursorKey && beforeFilter == m.listFilterState() && after != "" && beforeTab == m.activeTabIdx && beforeFocus == m.tabBarFocused {
-				generation := m.tuneGeneration
-				cmd = tea.Batch(cmd, tea.Tick(700*time.Millisecond, func(time.Time) tea.Msg {
-					return dialTuneMsg{generation, after}
-				}))
-			}
-		}
-	}()
 
 	switch msg := msg.(type) {
-	case dialTuneMsg:
-		if msg.generation == m.tuneGeneration && msg.uuid == m.dialStation() && msg.uuid != "" {
-			m.tuneGeneration++
-			if s, ok := m.navigationList().SelectedItem().(model.Station); ok {
-				return m, m.playStationCmd(s)
-			}
-		}
-		return m, nil
 	//
 	// messages that need to reach all tabs
 	//
@@ -319,44 +292,15 @@ func (m *Model) Update(msg tea.Msg) (result tea.Model, cmd tea.Cmd) {
 			return m, m.seekCmd(config.SeekStepSec)
 		}
 
-		if key.Matches(msg, d.keymap.pause) {
-			m.tuneGeneration++
+		if key.Matches(msg, d.keymap.pause) || key.Matches(msg, d.keymap.playSelected) {
 			if m.activeTabIdx == settingsTabIx {
 				return m.tabs[settingsTabIx].Update(m, msg)
 			}
-
-			if resM, resCmd := m.handlePauseKey(); resM != nil {
+			if resM, resCmd := m.handlePlayKey(activeTab, key.Matches(msg, d.keymap.pause)); resM != nil {
 				return resM, resCmd
 			}
-			activeTab, ok := activeTab.(stationTab)
-			if !ok {
-				break
-			}
-			selStation, ok := activeTab.Stations().list.SelectedItem().(model.Station)
-			if ok {
-				return m, m.playStationCmd(selStation)
-			}
 		}
 
-		if activeTab, ok := activeTab.(stationTab); ok && activeTab.IsInfoEnabled() {
-			break
-		}
-
-		if key.Matches(msg, d.keymap.playSelected) {
-			m.tuneGeneration++
-			if m.activeTabIdx == settingsTabIx {
-				return m.tabs[settingsTabIx].Update(m, msg)
-			}
-
-			activeTab, ok := activeTab.(stationTab)
-			if !ok {
-				break
-			}
-			selStation, ok := activeTab.Stations().list.SelectedItem().(model.Station)
-			if ok {
-				return m, m.playStationCmd(selStation)
-			}
-		}
 	}
 
 	//
@@ -366,19 +310,30 @@ func (m *Model) Update(msg tea.Msg) (result tea.Model, cmd tea.Cmd) {
 	return model, cmd
 }
 
-func (m *Model) handlePauseKey() (*Model, tea.Cmd) {
-	log := slog.With("method", "ui.Model.handlePauseKey")
-	log.Info("begin")
-	defer log.Info("end")
-
-	m.delegate.playingMtx.RLock()
-	defer m.delegate.playingMtx.RUnlock()
-
-	if m.delegate.currPlaying != nil {
-		return m, m.delegate.pauseCmd()
-	} else if m.delegate.prevPlaying != nil {
-		cmds := []tea.Cmd{m.initSpinner(), m.delegate.resumeCmd()}
-		return m, tea.Batch(cmds...)
+// handlePlayKey: on the selected station pause, resume or play it.
+// Off station lists space toggles the current station and enter goes to the tab.
+func (m *Model) handlePlayKey(tab uiTab, isSpace bool) (*Model, tea.Cmd) {
+	d := m.delegate
+	st, isStations := tab.(stationTab)
+	if !isSpace && (!isStations || st.IsInfoEnabled()) {
+		return nil, nil
+	}
+	var sel *model.Station
+	if isStations {
+		if s, ok := st.Stations().list.SelectedItem().(model.Station); ok {
+			sel = &s
+		}
+	}
+	d.playingMtx.RLock()
+	curr, prev := d.currPlaying, d.prevPlaying
+	d.playingMtx.RUnlock()
+	switch {
+	case curr != nil && (sel == nil || sel.Stationuuid == curr.Stationuuid):
+		return m, d.pauseCmd()
+	case curr == nil && prev != nil && (sel == nil || sel.Stationuuid == prev.Stationuuid):
+		return m, tea.Batch(m.initSpinner(), d.resumeCmd())
+	case sel != nil:
+		return m, m.playStationCmd(*sel)
 	}
 	return nil, nil
 }
