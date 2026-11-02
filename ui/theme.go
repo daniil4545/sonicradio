@@ -23,15 +23,28 @@ func retroTheme(name string, c RetroColors, bg string) Theme {
 var Themes = []Theme{
 	retroTheme("Retro Amber", RetroColors{
 		text: "#e8dcc0", dim: "#7a6a50", frame: "#a08660", label: "#e8a33d",
-		led: [retroBarRows]string{"#b8862f", "#e8a33d", "#f2c46d"},
+		led:    [retroBarRows]string{"#6fae4f", "#e8c547", "#d9573b"},
+		needle: "#e0533d", scale: "#5fb3a8", song: "#8fc1b5",
 	}, "#2a2218"),
+	retroTheme("Retro Sunset", RetroColors{
+		text: "#ecdcc8", dim: "#7d6a6a", frame: "#9a7f7f", label: "#f0a35e",
+		led:    [retroBarRows]string{"#e0835e", "#d9739a", "#a88ad8"},
+		needle: "#f06e8c", scale: "#b79ad8", song: "#d9a0b8",
+	}, "#2a1f22"),
+	retroTheme("Retro Hi-Fi", RetroColors{
+		text: "#d6e2ee", dim: "#5d6b7a", frame: "#7d8fa3", label: "#6cc4e0",
+		led:    [retroBarRows]string{"#4aa3c8", "#6cc4e0", "#f08a3c"},
+		needle: "#f08a3c", scale: "#8fb3d0", song: "#a8c8e0",
+	}, "#1a2230"),
 	retroTheme("Retro LED", RetroColors{
 		text: "#d8d0c0", dim: "#6e6658", frame: "#8c8474", label: "#d8b84a",
-		led: [retroBarRows]string{"#6fae4f", "#d8b84a", "#c8553d"},
+		led:    [retroBarRows]string{"#6fae4f", "#d8b84a", "#c8553d"},
+		needle: "#d8b84a", scale: "#6e6658", song: "#6e6658",
 	}, "#26231f"),
 	retroTheme("Retro Phosphor", RetroColors{
 		text: "#a8e0b0", dim: "#3f6b48", frame: "#4f8a5c", label: "#7fd08f",
-		led: [retroBarRows]string{"#3f9a55", "#5fc070", "#a8f0b0"},
+		led:    [retroBarRows]string{"#3f9a55", "#5fc070", "#a8f0b0"},
+		needle: "#7fd08f", scale: "#3f6b48", song: "#3f6b48",
 	}, "#132016"),
 	{
 		Name:  "Duo Yellow",

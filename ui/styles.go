@@ -119,6 +119,7 @@ func (s *Style) setTheme(t Theme) {
 		s.retro = RetroColors{
 			text: d.primaryColor, dim: d.invertedSecondaryColor, frame: d.secondaryColor,
 			label: d.secondaryColor, led: [retroBarRows]string{d.secondaryColor, d.secondaryColor, d.primaryColor},
+			needle: d.secondaryColor, scale: d.invertedSecondaryColor, song: d.secondaryColor,
 		}
 	}
 	s.theme = t.Name
