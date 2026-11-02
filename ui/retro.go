@@ -31,6 +31,8 @@ var retroBlocks = []rune(" ▁▂▃▄▅▆▇█")
 type RetroColors struct {
 	text, dim, frame, label string
 	led                     [retroBarRows]string // bottom, middle, top row
+	// accents: tuner pointer, scale digits and frequency, song and tags
+	needle, scale, song string
 }
 
 type retroState struct {
@@ -108,8 +110,8 @@ func (r *retroState) tunerRows(c RetroColors) [retroBarRows]string {
 	var scale, base strings.Builder
 	for col := range tunerW {
 		if col == nc {
-			scale.WriteString(fg(c.label, "┃"))
-			base.WriteString(fg(c.label, "▲"))
+			scale.WriteString(fg(c.needle, "┃"))
+			base.WriteString(fg(c.needle, "▲"))
 			continue
 		}
 		t := "╷"
@@ -120,7 +122,7 @@ func (r *retroState) tunerRows(c RetroColors) [retroBarRows]string {
 		base.WriteString(fg(c.frame, "━"))
 	}
 	gap := strings.Repeat(" ", tunerGap)
-	return [retroBarRows]string{fg(c.dim, string(labels)), scale.String() + gap, base.String() + gap}
+	return [retroBarRows]string{fg(c.scale, string(labels)), scale.String() + gap, base.String() + gap}
 }
 
 func (r *retroState) analyzerRows(c RetroColors, playing bool) [retroBarRows]string {
@@ -148,7 +150,11 @@ func (r *retroState) analyzerRows(c RetroColors, playing bool) [retroBarRows]str
 func volumeBarView(c RetroColors, vol int) string {
 	vol = max(0, min(100, vol))
 	n := vol / 5
-	return fg(c.dim, "VOL ") + fg(c.label, strings.Repeat("▰", n)) +
+	var on strings.Builder
+	for i := range n { // low segments take the bottom LED color, loud ones the top
+		on.WriteString(fg(c.led[min(retroBarRows-1, i*retroBarRows/20)], "▰"))
+	}
+	return fg(c.dim, "VOL ") + on.String() +
 		fg(c.dim, strings.Repeat("▱", 20-n)) + fg(c.dim, fmt.Sprintf(" %3d", vol))
 }
 
@@ -216,11 +222,10 @@ func (m *Model) retroHeaderView(width int) string {
 		}
 		freq := ""
 		if found {
-			freq = fmt.Sprintf(" · %.1f FM", target)
+			freq = fg(c.dim, " · ") + fg(c.scale, fmt.Sprintf("%.1f FM", target))
 		}
 		t := m.playbackTime
-		status = fg(c.label, icon) + " " + fg(c.text, s.Name) +
-			fg(c.dim, freq+" · ") +
+		status = fg(c.label, icon) + " " + fg(c.text, s.Name) + freq + fg(c.dim, " · ") +
 			fg(c.text, fmt.Sprintf("%02d:%02d:%02d", int(t.Hours()), int(t.Minutes())%60, int(t.Seconds())%60))
 	default:
 		status = fg(c.dim, "■ "+noPlayingMsg)
@@ -247,8 +252,8 @@ func (m *Model) retroHeaderView(width int) string {
 
 	song := ""
 	if m.songTitle != "" {
-		song = "♪ " + m.songTitle
+		song = fg(c.needle, "♪ ") + fg(c.song, m.songTitle)
 	}
-	res.WriteString(pad + lipgloss.NewStyle().MaxWidth(max(0, width-2*HeaderPadDist)).Render(fg(c.dim, song)) + "\n\n")
+	res.WriteString(pad + lipgloss.NewStyle().MaxWidth(max(0, width-2*HeaderPadDist)).Render(song) + "\n\n")
 	return res.String()
 }
