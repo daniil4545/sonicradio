@@ -170,6 +170,7 @@ func (m *Model) Update(msg tea.Msg) (result tea.Model, cmd tea.Cmd) {
 	activeTab := m.tabs[m.activeTabIdx]
 	before, beforeTab, beforeFocus := m.dialStation(), m.activeTabIdx, m.tabBarFocused
 	_, isKey := msg.(tea.KeyMsg)
+	beforeFilter := m.listFilterState()
 	cursorKey := isKey && m.navigationList() != nil
 	defer func() {
 		after := m.dialStation()
@@ -177,7 +178,7 @@ func (m *Model) Update(msg tea.Msg) (result tea.Model, cmd tea.Cmd) {
 			m.tuneGeneration++
 			// only a key moving the list cursor tunes: not entering the tab,
 			// leaving the tab bar, closing a filter or reloading the list
-			if cursorKey && after != "" && beforeTab == m.activeTabIdx && beforeFocus == m.tabBarFocused {
+			if cursorKey && beforeFilter == m.listFilterState() && after != "" && beforeTab == m.activeTabIdx && beforeFocus == m.tabBarFocused {
 				generation := m.tuneGeneration
 				cmd = tea.Batch(cmd, tea.Tick(700*time.Millisecond, func(time.Time) tea.Msg {
 					return dialTuneMsg{generation, after}

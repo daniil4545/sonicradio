@@ -27,6 +27,14 @@ func (m *Model) navigationList() *list.Model {
 	return nil
 }
 
+// listFilterState lets a filter reset, which swaps the selection, skip tuning.
+func (m *Model) listFilterState() list.FilterState {
+	if l := m.navigationList(); l != nil {
+		return l.FilterState()
+	}
+	return list.Unfiltered
+}
+
 func (m *Model) dialStation() string {
 	if m.activeTabIdx != favoriteTabIx || m.tabBarFocused {
 		return ""
