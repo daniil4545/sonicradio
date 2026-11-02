@@ -36,6 +36,8 @@ const (
 	favoritesRefreshIdx settingsInputIdx = iota
 	historySaveMaxIdx
 	themesIdx
+	retroHeaderIdx
+	animationIdx
 	playerTypeIdx
 	internalBufferSecIdx
 	mpdHostIdx
@@ -88,6 +90,9 @@ func newSettingsTab(
 	themeList.PartialCallbackFn = changeThemeFn
 	themeList.DoneCallbackFn = changeThemeFn
 
+	retroHeader := NewCheckbox("Retro header", !cfg.ClassicHeader, s)
+	animation := NewCheckbox("Header animation", !cfg.NoAnimation, s)
+
 	// player
 	playerOpts := make([]OptionValue, len(availablePlayerTypes))
 	var startIdx int
@@ -118,6 +123,12 @@ func newSettingsTab(
 		NewFormElement(
 			WithOptionList(&themeList),
 			WithDescription(descriptions[1])),
+		NewFormElement(
+			WithCheckbox(retroHeader),
+			WithDescription("Tuner scale, spectrum analyzer and volume bar. Off: the original minimal header.")),
+		NewFormElement(
+			WithCheckbox(animation),
+			WithDescription("Animate the tuner pointer and the analyzer while a station plays.")),
 		NewFormElement(
 			WithOptionList(&playerList),
 			WithDescription(playerDesc)),
@@ -190,6 +201,9 @@ func (s *settingsTab) loadConfig() {
 
 	s.inputs[historySaveMaxIdx].SetValue(fmt.Sprintf("%d", *s.cfg.HistorySaveMax))
 
+	s.inputs[retroHeaderIdx].SetValue(!s.cfg.ClassicHeader)
+	s.inputs[animationIdx].SetValue(!s.cfg.NoAnimation)
+
 	s.inputs[internalBufferSecIdx].SetValue(fmt.Sprintf("%d", s.cfg.Internal.BufferSeconds))
 
 	if len(s.inputs) > int(internalBufferSecIdx)+1 {
@@ -221,11 +235,18 @@ func (s *settingsTab) onEnter() tea.Cmd {
 	return s.inputs[favoritesRefreshIdx].Focus()
 }
 
-func (s *settingsTab) onExit() {
+func (s *settingsTab) onExit(m *Model) tea.Cmd {
 	s.inputs[themesIdx].Blur()
 	s.keymap.setEnable(false, false)
 
+	classic := s.cfg.ClassicHeader
 	s.updateConfig()
+	if classic == s.cfg.ClassicHeader {
+		return nil
+	}
+	// the header height changed: resize so the lists get the new height
+	w, h := m.width, m.totHeight
+	return func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
 }
 
 func (s *settingsTab) updateConfig() {
@@ -237,6 +258,13 @@ func (s *settingsTab) updateConfig() {
 		log.Info(fmt.Sprintf("invalid value for config Favorites.RefreshOnStart (%v) err: %v", favoritesRefreshVal, err))
 	} else {
 		s.cfg.Favorites.RefreshOnStart = favoritesRefreshBoolVal
+	}
+
+	if v, err := strconv.ParseBool(s.inputs[retroHeaderIdx].Value()); err == nil {
+		s.cfg.ClassicHeader = !v
+	}
+	if v, err := strconv.ParseBool(s.inputs[animationIdx].Value()); err == nil {
+		s.cfg.NoAnimation = !v
 	}
 
 	historySaveMaxval := s.inputs[historySaveMaxIdx].Value()
@@ -323,13 +351,13 @@ func (s *settingsTab) Update(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 	m.toBrowseTab()
 		// 	return m.tabs[browseTabIx].Update(m, msg)
 		case key.Matches(msg, s.keymap.nextTab, s.keymap.favoritesTab):
-			s.onExit()
+			cmds = append(cmds, s.onExit(m))
 			m.toFavoritesTab()
 		case key.Matches(msg, s.keymap.browseTab):
-			s.onExit()
+			cmds = append(cmds, s.onExit(m))
 			m.toBrowseTab()
 		case key.Matches(msg, s.keymap.prevTab, s.keymap.historyTab):
-			s.onExit()
+			cmds = append(cmds, s.onExit(m))
 			m.toHistoryTab()
 
 		case key.Matches(msg, s.keymap.nextInput):
@@ -388,6 +416,10 @@ func (s *settingsTab) resetSettings() {
 
 	s.changeThemeFn(0)
 	s.inputs[themesIdx].SetValue(0)
+
+	// cfg is updated by onExit, which also resizes when the header style changes
+	s.inputs[retroHeaderIdx].SetValue(true)
+	s.inputs[animationIdx].SetValue(true)
 }
 
 func (s *settingsTab) changeInput(cmds []tea.Cmd) []tea.Cmd {

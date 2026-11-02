@@ -39,25 +39,28 @@ type Station struct {
 
 func (s Station) Title() string { return s.Name }
 func (s Station) Description() string {
-	desc := s.Countrycode
-	if strings.TrimSpace(s.State) != "" {
-		desc += ", " + s.State
+	var parts []string
+	if tags := strings.TrimSpace(s.Tags); tags != "" {
+		parts = append(parts, tags)
 	}
-	if strings.TrimSpace(s.Language) != "" {
-		desc += ", " + s.Language
+	if s.Bitrate > 0 {
+		parts = append(parts, fmt.Sprintf("%d kbps", s.Bitrate))
 	}
-	if strings.TrimSpace(desc) == "" {
-		desc = "-"
+	var location []string
+	for _, value := range []string{s.Countrycode, s.State, s.Language} {
+		if value = strings.TrimSpace(value); value != "" {
+			location = append(location, value)
+		}
 	}
-	bitrateS := "  - kbps"
-	if s.Bitrate != 0 {
-		bitrateS = fmt.Sprintf("%3d kbps", s.Bitrate)
+	if len(location) > 0 {
+		parts = append(parts, strings.Join(location, ", "))
 	}
-	desc = fmt.Sprintf("Votes: %6[2]d, Clicks: %5[6]d %[1]s %[3]s %[1]s %[4]s %[1]s %[5]s",
-		separator, s.Votes, bitrateS, desc, s.Tags, s.Clickcount)
-	desc = strings.TrimSpace(desc)
-	desc = strings.Trim(desc, "|")
-	desc = strings.TrimSpace(desc)
-	return desc
+	if s.Votes > 0 {
+		parts = append(parts, fmt.Sprintf("Votes: %d", s.Votes))
+	}
+	if s.Clickcount > 0 {
+		parts = append(parts, fmt.Sprintf("Clicks: %d", s.Clickcount))
+	}
+	return strings.Join(parts, " "+separator+" ")
 }
 func (s Station) FilterValue() string { return s.Name }

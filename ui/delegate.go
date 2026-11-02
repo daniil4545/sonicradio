@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/dancnb/sonicradio/browser"
 	"github.com/dancnb/sonicradio/config"
 	"github.com/dancnb/sonicradio/model"
@@ -260,6 +261,10 @@ func (d *stationDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 	prefix := IndexString(index + 1)
 
 	listWidth := m.Width()
+	desc := s.Description()
+	if d.cfg.StationView == config.MinimalView {
+		desc = strings.TrimSpace(s.Tags)
+	}
 	if isCurr || isPrev {
 		itStyle := d.style.PrimaryColorStyle
 		descStyle := d.style.SecondaryColorStyle
@@ -270,12 +275,12 @@ func (d *stationDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		prefixStyle := d.style.NowPlayingPrefixStyle
 		widthOffset := 1
 
-		str = d.renderStationView(prefix, name, s.Description(), listWidth, widthOffset, prefixStyle, itStyle, descStyle)
+		str = d.renderStationView(prefix, name, desc, listWidth, widthOffset, prefixStyle, itStyle, descStyle)
 
 		str = d.style.SelectedBorderStyle.Render(str)
 	} else {
 		itStyle := d.style.PrimaryColorStyle
-		descStyle := d.style.SecondaryColorStyle
+		descStyle := d.style.TagStyle
 		if isSel {
 			itStyle = d.style.SelItemStyle
 			descStyle = d.style.SelDescStyle
@@ -283,7 +288,7 @@ func (d *stationDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		prefixStyle := d.style.PrefixStyle
 		widthOffset := 0
 
-		str = d.renderStationView(prefix, name, s.Description(), listWidth, widthOffset, prefixStyle, itStyle, descStyle)
+		str = d.renderStationView(prefix, name, desc, listWidth, widthOffset, prefixStyle, itStyle, descStyle)
 	}
 
 	_, _ = fmt.Fprint(w, str)
@@ -396,14 +401,16 @@ func (d *stationDelegate) renderMinimalView(
 	var res strings.Builder
 	prefixRender := prefixStyle.Render(prefix)
 	res.WriteString(prefixRender)
-	maxWidth := max(listWidth-lipgloss.Width(prefixRender)-HeaderPadDist, 0)
-
-	for lipgloss.Width(itStyle.Render(name)) > maxWidth-widthOffset && len(name) > 0 {
-		name = name[:len(name)-1]
-	}
+	maxWidth := max(listWidth-lipgloss.Width(prefixRender)-HeaderPadDist-widthOffset, 0)
+	name = ansi.Truncate(name, maxWidth, "")
 	nameRender := itStyle.Render(name)
 	res.WriteString(nameRender)
-	hFill := max(listWidth-lipgloss.Width(prefixRender)-lipgloss.Width(nameRender)-HeaderPadDist-widthOffset, 0)
+	remaining := max(maxWidth-lipgloss.Width(nameRender)-2, 0)
+	if desc = ansi.Truncate(desc, remaining, ""); desc != "" {
+		res.WriteString("  ")
+		res.WriteString(descStyle.Render(desc))
+	}
+	hFill := max(listWidth-lipgloss.Width(res.String())-HeaderPadDist-widthOffset, 0)
 	res.WriteString(itStyle.Render(strings.Repeat(" ", hFill)))
 
 	return res.String()
@@ -411,7 +418,7 @@ func (d *stationDelegate) renderMinimalView(
 
 func (d *stationDelegate) ShortHelp() []key.Binding {
 	return []key.Binding{
-		d.keymap.playSelected, d.keymap.pause, d.keymap.toggleFavorite, d.keymap.toggleAutoplay,
+		d.keymap.playSelected, d.keymap.pause, d.keymap.volumeDown, d.keymap.volumeUp, d.keymap.toggleFavorite,
 	}
 }
 
@@ -442,7 +449,7 @@ func newDelegateKeyMap() *delegateKeyMap {
 		),
 		playSelected: key.NewBinding(
 			key.WithKeys("enter", "l"),
-			key.WithHelp("enter/l", "play"),
+			key.WithHelp("enter/l", "play/pause"),
 		),
 		info: key.NewBinding(
 			key.WithKeys("i"),

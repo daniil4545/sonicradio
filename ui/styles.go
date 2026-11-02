@@ -30,6 +30,8 @@ type Style struct {
 	baseSecondaryColor     lipgloss.AdaptiveColor
 	invertedPrimaryColor   lipgloss.AdaptiveColor
 	invertedSecondaryColor lipgloss.AdaptiveColor
+	retro                  RetroColors
+	TagStyle               lipgloss.Style // station tags in the list
 
 	PrimaryColorStyle   lipgloss.Style
 	SecondaryColorStyle lipgloss.Style
@@ -111,6 +113,16 @@ func (s *Style) SetThemeIdx(themeIdx int) {
 }
 
 func (s *Style) setTheme(t Theme) {
+	if t.Retro != nil {
+		s.retro = *t.Retro
+	} else {
+		d := t.Dark
+		s.retro = RetroColors{
+			text: d.primaryColor, dim: d.invertedSecondaryColor, frame: d.secondaryColor,
+			label: d.secondaryColor, led: [retroBarRows]string{d.secondaryColor, d.secondaryColor, d.primaryColor},
+			needle: d.secondaryColor, scale: d.invertedSecondaryColor, song: d.invertedSecondaryColor,
+		}
+	}
 	s.theme = t.Name
 	s.basePrimaryColor = lipgloss.AdaptiveColor{Light: t.Light.primaryColor, Dark: t.Dark.primaryColor}
 	s.baseSecondaryColor = lipgloss.AdaptiveColor{Light: t.Light.secondaryColor, Dark: t.Dark.secondaryColor}
@@ -119,6 +131,10 @@ func (s *Style) setTheme(t Theme) {
 
 	s.PrimaryColorStyle = lipgloss.NewStyle().Foreground(s.basePrimaryColor)
 	s.SecondaryColorStyle = lipgloss.NewStyle().Foreground(s.baseSecondaryColor)
+	s.TagStyle = s.SecondaryColorStyle
+	if t.Retro != nil {
+		s.TagStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(t.Retro.song))
+	}
 	//
 	// general
 	s.StatusBarStyle = lipgloss.NewStyle().Background(s.baseSecondaryColor).Foreground(s.invertedPrimaryColor)

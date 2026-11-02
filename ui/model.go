@@ -68,6 +68,7 @@ func newModel(ctx context.Context, cfg *config.Value, b *browser.API, p *player.
 		statusUpdate: make(chan struct{}),
 
 		volumeBar: getVolumeBar(style.GetSecondColor()),
+		retro:     newRetroState(),
 	}
 	m.tabs = []uiTab{
 		newFavoritesTab(cfg, infoModel, b, style),
@@ -138,8 +139,9 @@ type Model struct {
 	player   *player.Player
 	delegate *stationDelegate
 
-	tabs         []uiTab
-	activeTabIdx uiTabIndex
+	tabs          []uiTab
+	activeTabIdx  uiTabIndex
+	tabBarFocused bool
 
 	// display currently performed action or encountered error
 	statusMsg    string
@@ -150,6 +152,7 @@ type Model struct {
 	spinner      *spinner.Model
 	songTitle    string
 	volumeBar    progress.Model
+	retro        retroState
 
 	width        int
 	totHeight    int
@@ -160,6 +163,7 @@ func (m *Model) Init() tea.Cmd {
 	return nil
 }
 
+//nolint:gocognit,funlen // The event dispatcher keeps tab routing in one place.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	logTeaMsg(msg, "ui.model.Update")
 	activeTab := m.tabs[m.activeTabIdx]
@@ -215,6 +219,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		s, cmd := m.spinner.Update(msg)
 		m.spinner = &s
+		if cmd != nil {
+			m.retroStep()
+		}
 		return m, cmd
 
 	//
@@ -251,11 +258,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
+		} else if m.tabBarFocused && isTabBarKey(msg) {
+			return m, m.updateTabBar(msg)
 		} else if activeTab, ok := activeTab.(filteringTab); ok && activeTab.IsFiltering() {
 			break
 		} else if activeTab, ok := activeTab.(stationTab); ok &&
 			(activeTab.IsSearchEnabled() || activeTab.IsFiltering() || activeTab.IsCustomStationEnabled()) {
 			break
+		}
+		if l := m.navigationList(); l != nil && msg.String() == "up" && l.Index() == 0 {
+			m.tabBarFocused = true
+			return m, nil
 		}
 
 		d := m.delegate
@@ -279,42 +292,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.seekCmd(config.SeekStepSec)
 		}
 
-		if key.Matches(msg, d.keymap.pause) {
+		if key.Matches(msg, d.keymap.pause) || key.Matches(msg, d.keymap.playSelected) {
 			if m.activeTabIdx == settingsTabIx {
 				return m.tabs[settingsTabIx].Update(m, msg)
 			}
-
-			if resM, resCmd := m.handlePauseKey(); resM != nil {
+			if resM, resCmd := m.handlePlayKey(activeTab, key.Matches(msg, d.keymap.pause)); resM != nil {
 				return resM, resCmd
 			}
-			activeTab, ok := activeTab.(stationTab)
-			if !ok {
-				break
-			}
-			selStation, ok := activeTab.Stations().list.SelectedItem().(model.Station)
-			if ok {
-				return m, m.playStationCmd(selStation)
-			}
 		}
 
-		if activeTab, ok := activeTab.(stationTab); ok && activeTab.IsInfoEnabled() {
-			break
-		}
-
-		if key.Matches(msg, d.keymap.playSelected) {
-			if m.activeTabIdx == settingsTabIx {
-				return m.tabs[settingsTabIx].Update(m, msg)
-			}
-
-			activeTab, ok := activeTab.(stationTab)
-			if !ok {
-				break
-			}
-			selStation, ok := activeTab.Stations().list.SelectedItem().(model.Station)
-			if ok {
-				return m, m.playStationCmd(selStation)
-			}
-		}
 	}
 
 	//
@@ -324,19 +310,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
-func (m *Model) handlePauseKey() (*Model, tea.Cmd) {
-	log := slog.With("method", "ui.Model.handlePauseKey")
-	log.Info("begin")
-	defer log.Info("end")
-
-	m.delegate.playingMtx.RLock()
-	defer m.delegate.playingMtx.RUnlock()
-
-	if m.delegate.currPlaying != nil {
-		return m, m.delegate.pauseCmd()
-	} else if m.delegate.prevPlaying != nil {
-		cmds := []tea.Cmd{m.initSpinner(), m.delegate.resumeCmd()}
-		return m, tea.Batch(cmds...)
+// handlePlayKey: on the selected station pause, resume or play it.
+// Off station lists space toggles the current station and enter goes to the tab.
+func (m *Model) handlePlayKey(tab uiTab, isSpace bool) (*Model, tea.Cmd) {
+	d := m.delegate
+	st, isStations := tab.(stationTab)
+	if !isSpace && (!isStations || st.IsInfoEnabled()) {
+		return nil, nil
+	}
+	var sel *model.Station
+	if isStations {
+		if s, ok := st.Stations().list.SelectedItem().(model.Station); ok {
+			sel = &s
+		}
+	}
+	d.playingMtx.RLock()
+	curr, prev := d.currPlaying, d.prevPlaying
+	d.playingMtx.RUnlock()
+	switch {
+	case curr != nil && (sel == nil || sel.Stationuuid == curr.Stationuuid):
+		return m, d.pauseCmd()
+	case curr == nil && prev != nil && (sel == nil || sel.Stationuuid == prev.Stationuuid):
+		return m, tea.Batch(m.initSpinner(), d.resumeCmd())
+	case sel != nil:
+		return m, m.playStationCmd(*sel)
 	}
 	return nil, nil
 }
@@ -433,21 +430,22 @@ func (m *Model) initSpinner() tea.Cmd {
 
 func (m *Model) headerView(width int) string {
 	var res strings.Builder
-	status := ""
-	if len(m.statusMsg) > 0 {
-		status = m.style.StatusBarStyle.Render(strings.Repeat(" ", HeaderPadDist) + m.statusMsg)
+	if m.cfg.ClassicHeader {
+		status := ""
+		if len(m.statusMsg) > 0 {
+			status = m.style.StatusBarStyle.Render(strings.Repeat(" ", HeaderPadDist) + m.statusMsg)
+		}
+		res.WriteString(status)
+		appNameVers := m.style.StatusBarStyle.Render(fmt.Sprintf("sonicradio v%v  ", m.cfg.Version))
+		fill := max(0, width-lipgloss.Width(status)-lipgloss.Width(appNameVers)-2*HeaderPadDist)
+		res.WriteString(m.style.StatusBarStyle.Render(strings.Repeat(" ", fill)))
+		res.WriteString(appNameVers)
+		res.WriteString("\n\n")
+		res.WriteString(m.metadataView(width))
+		res.WriteString("\n\n")
+	} else {
+		res.WriteString(m.retroHeaderView(width))
 	}
-	res.WriteString(status)
-	appNameVers := m.style.StatusBarStyle.Render(fmt.Sprintf("sonicradio v%v  ", m.cfg.Version))
-	fill := max(0, width-lipgloss.Width(status)-lipgloss.Width(appNameVers)-2*HeaderPadDist)
-	res.WriteString(m.style.StatusBarStyle.Render(strings.Repeat(" ", fill)))
-	res.WriteString(appNameVers)
-	res.WriteString("\n\n")
-
-	metadata := m.metadataView(width)
-	res.WriteString(metadata)
-
-	res.WriteString("\n\n")
 
 	var renderedTabs []string
 	renderedTabs = append(renderedTabs, m.style.TabGap.Render(strings.Repeat(" ", TabGapDistance)))
@@ -455,6 +453,10 @@ func (m *Model) headerView(width int) string {
 		if i == int(m.activeTabIdx) {
 			tabName := m.activeTabIdx.String()
 			renderedTab := m.renderTabName(tabName, &m.style.ActiveTabInner, &m.style.ActiveTabInnerHighlight)
+			if m.tabBarFocused {
+				renderedTab.Reset()
+				renderedTab.WriteString(m.style.ActiveTabInnerHighlight.Render(" ▸" + strings.TrimSpace(tabName) + " "))
+			}
 			renderedTabs = append(renderedTabs, m.style.ActiveTabBorder.Render(renderedTab.String()))
 		} else {
 			tabName := uiTabIndex(i).String()
