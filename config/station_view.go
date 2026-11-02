@@ -15,7 +15,7 @@ func (s StationView) String() string {
 }
 
 const (
-	DefaultView StationView = iota
+	MinimalView StationView = iota
 	CompactView
-	MinimalView
+	DefaultView
 )

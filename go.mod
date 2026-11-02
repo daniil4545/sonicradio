@@ -4,6 +4,7 @@ go 1.23.5
 
 require (
 	github.com/charmbracelet/bubbletea v1.2.0
+	github.com/charmbracelet/x/ansi v0.4.5
 	github.com/gopxl/beep/v2 v2.1.1
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
@@ -12,7 +13,6 @@ require (
 require (
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/charmbracelet/harmonica v0.2.0 // indirect
-	github.com/charmbracelet/x/ansi v0.4.5 // indirect
 	github.com/charmbracelet/x/term v0.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/ebitengine/oto/v3 v3.3.2 // indirect
