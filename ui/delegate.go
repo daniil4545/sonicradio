@@ -449,7 +449,7 @@ func newDelegateKeyMap() *delegateKeyMap {
 		),
 		playSelected: key.NewBinding(
 			key.WithKeys("enter", "l"),
-			key.WithHelp("enter/l", "play"),
+			key.WithHelp("enter/l", "play/pause"),
 		),
 		info: key.NewBinding(
 			key.WithKeys("i"),

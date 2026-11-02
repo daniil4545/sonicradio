@@ -41,68 +41,51 @@ func press(m *Model, k tea.KeyType) tea.Cmd {
 	return cmd
 }
 
-func TestDialDebounce(t *testing.T) {
-	m := dialModel()
-	tick := press(m, tea.KeyDown)
-	if tick == nil {
-		t.Fatal("cursor movement did not schedule a timer")
-	}
-	first, ok := tick().(dialTuneMsg)
-	if !ok || first.uuid != "b" {
-		t.Fatal("timer did not capture the selected station")
-	}
-	if freq, ok := m.retroTarget(); !ok || freq != stationFreq(1, 3) {
-		t.Fatal("pointer did not follow Favorites cursor")
-	}
-	press(m, tea.KeyDown)
-	last := dialTuneMsg{m.tuneGeneration, "c"}
-	if _, cmd := m.Update(first); cmd != nil {
-		t.Fatal("stale timer started playback")
-	}
-	_, cmd := m.Update(last)
-	if cmd == nil || m.statusMsg != "Connecting to C..." {
-		t.Fatal("final timer did not request the selected station")
-	}
-	if _, cmd := m.Update(last); cmd != nil {
-		t.Fatal("duplicate timer started playback twice")
+func TestPlayKeys(t *testing.T) {
+	space := tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	for _, tc := range []struct {
+		name    string
+		key     tea.KeyMsg
+		down    bool // cursor on the second station, A plays
+		paused  bool
+		connect bool // expect a new station to start
+	}{
+		{"space on playing pauses", space, false, false, false},
+		{"enter on playing pauses", enter, false, false, false},
+		{"space on other plays it", space, true, false, true},
+		{"enter on other plays it", enter, true, false, true},
+		{"enter on paused resumes", enter, false, true, false},
+		{"space on other while paused plays it", space, true, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := dialModel()
+			if tc.paused {
+				m.delegate.prevPlaying, m.delegate.currPlaying = m.delegate.currPlaying, nil
+			}
+			if tc.down {
+				press(m, tea.KeyDown)
+			}
+			_, cmd := m.Update(tc.key)
+			if cmd == nil {
+				t.Fatal("key did nothing")
+			}
+			if got := strings.HasPrefix(m.statusMsg, "Connecting to"); got != tc.connect {
+				t.Fatalf("connect = %v, status %q", got, m.statusMsg)
+			}
+		})
 	}
 }
 
-func TestDialDoesNotAutoplay(t *testing.T) {
-	for _, mode := range []string{"paused", "stopped", "browse", "history", "tabs", "filter", "pause-resume"} {
-		t.Run(mode, func(t *testing.T) {
-			m := dialModel()
-			press(m, tea.KeyDown)
-			pending := dialTuneMsg{m.tuneGeneration, "b"}
-			switch mode {
-			case "paused", "stopped":
-				if mode == "paused" {
-					m.delegate.prevPlaying = m.delegate.currPlaying
-				}
-				m.delegate.currPlaying = nil
-			case "browse":
-				m.toBrowseTab()
-				press(m, tea.KeyDown)
-			case "history":
-				m.toHistoryTab()
-				press(m, tea.KeyDown)
-			case "tabs":
-				press(m, tea.KeyUp)
-				press(m, tea.KeyUp)
-			case "filter":
-				m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
-			case "pause-resume":
-				m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
-			}
-			if _, cmd := m.Update(pending); cmd != nil {
-				t.Fatal("pending timer started playback")
-			}
-			if mode == "browse" || mode == "history" {
-				if freq, _ := m.retroTarget(); freq != stationFreq(0, 3) {
-					t.Fatal("pointer moved away from playing station")
-				}
-			}
-		})
+func TestCursorDoesNotSwitch(t *testing.T) {
+	m := dialModel()
+	press(m, tea.KeyDown)
+	press(m, tea.KeyDown)
+	if m.statusMsg != "" || m.delegate.currPlaying.Stationuuid != "a" {
+		t.Fatal("moving the cursor must not switch stations")
+	}
+	if freq, _ := m.retroTarget(); freq != stationFreq(0, 3) {
+		t.Fatal("pointer must stay on the playing station")
 	}
 }
 
@@ -141,6 +124,7 @@ func TestTabFocus(t *testing.T) {
 
 func TestDialHeaderAndSettings(t *testing.T) {
 	m := dialModel()
+	m.delegate.currPlaying = nil
 	press(m, tea.KeyDown)
 	start := m.retro.needle
 	m.retroStep()
