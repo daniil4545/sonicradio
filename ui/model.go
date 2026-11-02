@@ -500,7 +500,7 @@ func (m *Model) headerView(width int) string {
 			renderedTab := m.renderTabName(tabName, &m.style.ActiveTabInner, &m.style.ActiveTabInnerHighlight)
 			if m.tabBarFocused {
 				renderedTab.Reset()
-				renderedTab.WriteString(m.style.ActiveTabInner.Foreground(lipgloss.Color(m.style.retro.label)).Render(" ▸" + strings.TrimSpace(tabName) + " "))
+				renderedTab.WriteString(m.style.ActiveTabInnerHighlight.Render(" ▸" + strings.TrimSpace(tabName) + " "))
 			}
 			renderedTabs = append(renderedTabs, m.style.ActiveTabBorder.Render(renderedTab.String()))
 		} else {
