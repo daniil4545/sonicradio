@@ -280,7 +280,7 @@ func (d *stationDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		str = d.style.SelectedBorderStyle.Render(str)
 	} else {
 		itStyle := d.style.PrimaryColorStyle
-		descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(d.style.retro.song))
+		descStyle := d.style.TagStyle
 		if isSel {
 			itStyle = d.style.SelItemStyle
 			descStyle = d.style.SelDescStyle
