@@ -14,9 +14,10 @@ import (
 // Retro header: tuner scale, fake spectrum analyzer and volume bar.
 
 const (
-	retroBars    = 12
+	retroBars    = 12 // analyzer bars on a narrow terminal
+	retroMaxBars = 32
 	retroBarRows = 3
-	tunerW       = 26 // scale columns for 88..108 MHz
+	tunerW       = 26 // minimal scale columns for 88..108 MHz
 	tunerMinFreq = 88.0
 	tunerMaxFreq = 108.0
 	// width below which the analyzer is hidden
@@ -43,8 +44,8 @@ type retroState struct {
 
 func newRetroState() retroState {
 	return retroState{
-		level:  make([]float64, retroBars),
-		peak:   make([]float64, retroBars),
+		level:  make([]float64, retroMaxBars),
+		peak:   make([]float64, retroMaxBars),
 		needle: tunerMinFreq,
 		rnd:    rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec // visual noise only
 	}
@@ -58,9 +59,19 @@ func stationFreq(idx, n int) float64 {
 	return tunerMinFreq + (float64(idx)+0.5)*(tunerMaxFreq-tunerMinFreq)/float64(n)
 }
 
-func tunerCol(f float64) int {
-	c := int(math.Round((f - tunerMinFreq) / (tunerMaxFreq - tunerMinFreq) * (tunerW - 1)))
-	return max(0, min(tunerW-1, c))
+func tunerCol(f float64, w int) int {
+	c := int(math.Round((f - tunerMinFreq) / (tunerMaxFreq - tunerMinFreq) * float64(w-1)))
+	return max(0, min(w-1, c))
+}
+
+// retroLayout splits the header width between the tuner scale and the analyzer.
+func retroLayout(width int) (scaleW, bars int) {
+	avail := width - 2*HeaderPadDist
+	if avail < retroMinWidthAnalyzer-2*HeaderPadDist {
+		return tunerW, 0
+	}
+	bars = max(retroBars, min(retroMaxBars, avail/6))
+	return max(tunerW, avail-tunerGap-bars*2), bars
 }
 
 // step advances one animation frame: the pointer glides to target,
@@ -81,7 +92,7 @@ func (r *retroState) step(target float64, playing bool) {
 		case tuning:
 			t = 0.05 + 0.3*r.rnd.Float64()
 		default:
-			env := 0.62 - 0.3*float64(i)/retroBars
+			env := 0.62 - 0.3*float64(i)/retroMaxBars
 			t = env * (0.3 + 0.7*r.rnd.Float64())
 			if beat && i < 3 {
 				t = math.Min(1, t+0.35)
@@ -100,21 +111,29 @@ func (r *retroState) tuning(target float64) bool { return math.Abs(target-r.need
 
 func fg(c, s string) string { return lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(s) }
 
-func (r *retroState) tunerRows(c RetroColors) [retroBarRows]string {
-	labels := []rune(strings.Repeat(" ", tunerW+tunerGap))
-	for f := int(tunerMinFreq); f <= int(tunerMaxFreq); f += 4 {
-		copy(labels[tunerCol(float64(f)):], []rune(strconv.Itoa(f)))
+func (r *retroState) tunerRows(c RetroColors, w int) [retroBarRows]string {
+	labels := []rune(strings.Repeat(" ", w+tunerGap))
+	step := 4
+	if w >= 60 {
+		step = 2
 	}
-	nc := tunerCol(r.needle)
+	for f := int(tunerMinFreq); f <= int(tunerMaxFreq); f += step {
+		copy(labels[tunerCol(float64(f), w):], []rune(strconv.Itoa(f)))
+	}
+	major := map[int]bool{}
+	for f := int(tunerMinFreq); f <= int(tunerMaxFreq); f++ {
+		major[tunerCol(float64(f), w)] = f%2 == 0
+	}
+	nc := tunerCol(r.needle, w)
 	var scale, base strings.Builder
-	for col := range tunerW {
+	for col := range w {
 		if col == nc {
 			scale.WriteString(fg(c.needle, "┃"))
 			base.WriteString(fg(c.needle, "▲"))
 			continue
 		}
 		t := "╷"
-		if col%5 == 0 {
+		if major[col] {
 			t = "│"
 		}
 		scale.WriteString(fg(c.dim, t))
@@ -124,19 +143,21 @@ func (r *retroState) tunerRows(c RetroColors) [retroBarRows]string {
 	return [retroBarRows]string{fg(c.scale, string(labels)), scale.String() + gap, base.String() + gap}
 }
 
-func (r *retroState) analyzerRows(c RetroColors, playing bool) [retroBarRows]string {
+// analyzerRows draws n bars sampled from the full band set.
+func (r *retroState) analyzerRows(c RetroColors, playing bool, n int) [retroBarRows]string {
 	var rows [retroBarRows]string
 	if !playing {
-		blank := strings.Repeat(" ", retroBars*2)
+		blank := strings.Repeat(" ", n*2)
 		return [retroBarRows]string{blank, blank, blank}
 	}
 	for row := retroBarRows - 1; row >= 0; row-- {
 		var b strings.Builder
-		for i := range retroBars {
+		for j := range n {
+			i := j * retroMaxBars / n
 			fill := (r.level[i]*retroBarRows - float64(row)) * 8
 			ch := retroBlocks[int(math.Max(0, math.Min(8, fill)))]
 			pk := r.peak[i] * retroBarRows
-			if ch == ' ' && playing && pk > float64(row) && pk <= float64(row+1) {
+			if ch == ' ' && pk > float64(row) && pk <= float64(row+1) {
 				ch = '▔'
 			}
 			b.WriteString(fg(c.led[row], string(ch)) + " ")
@@ -234,11 +255,12 @@ func (m *Model) retroHeaderView(width int) string {
 	res.WriteString(pad + fg(c.label, "SONIC DECK") + "  " +
 		lipgloss.NewStyle().MaxWidth(max(0, width-2*HeaderPadDist-12)).Render(status) + "\n")
 
-	tu := m.retro.tunerRows(c)
-	an := m.retro.analyzerRows(c, playing)
+	scaleW, bars := retroLayout(width)
+	tu := m.retro.tunerRows(c, scaleW)
+	an := m.retro.analyzerRows(c, playing, bars)
 	for i := range tu {
 		line := pad + tu[i]
-		if width >= retroMinWidthAnalyzer {
+		if bars > 0 {
 			line += an[i]
 		}
 		res.WriteString(line + "\n")
